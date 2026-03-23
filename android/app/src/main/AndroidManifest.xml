@@ -9,6 +9,9 @@
 			<data android:scheme="http" />
 		</intent>
 	</queries>
+
+	<uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="Timetable"
         android:name="${applicationName}"
