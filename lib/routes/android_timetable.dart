@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ulan_timetable/services/timetable_service.dart';
 import 'package:ulan_timetable/services/credentials_service.dart';
 import 'package:ulan_timetable/services/cache_service.dart';
+import 'package:ulan_timetable/services/update_service.dart';
 
 // Widgets.
 import 'package:ulan_timetable/widgets/app_drawer.dart';
@@ -35,8 +36,9 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 	// State.
 	// ############################
 
-	final _service = TimetableService();
-	final _cache   = CacheService();
+	final _service       = TimetableService();
+	final _cache         = CacheService();
+	final _updateService = UpdateService();
 
 	List<TimetableEvent> _events     = [];
 	bool                 _isLoading  = false;
@@ -55,6 +57,7 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 		super.initState();
 		_startDate = _service.getCurrentWeekMonday();
 		_initialLoad();
+		_checkForUpdates();
 	}
 
 	// ############################
@@ -68,13 +71,11 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 
 		if (_cache.has(currentWeek))
 		{
-			// Instant — no spinner needed.
 			_applyCache(currentWeek);
 			_fetchAndCache(nextWeek);
 		}
 		else
 		{
-			// Show spinner and fetch both in parallel.
 			setState(() => _isLoading = true);
 
 			await Future.wait
@@ -100,6 +101,23 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 					},
 				);
 			}
+		}
+	}
+
+	Future<void> _checkForUpdates() async
+	{
+		try
+		{
+			final result = await _updateService.checkForUpdate();
+
+			if (result.hasUpdate && mounted)
+			{
+				_updateService.showUpdateDialog(context, result.latestVersion);
+			}
+		}
+		catch (_)
+		{
+			// Silently fail — update check is non-critical.
 		}
 	}
 
@@ -135,7 +153,6 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 			final weekNumber = _service.parseWeekNumber(html);
 
 			_cache.store(startDate, events, weekNumber);
-			print('Cached: $startDate (${events.length} events)');
 		}
 		catch (_)
 		{
@@ -145,17 +162,16 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 
 	Future<void> _navigateTo(String targetDate) async
 	{
-		// Block if a fetch is already in flight.
 		if (_isFetching) return;
 
-		// Cache hit — update everything in one synchronous setState, no spinner.
+		// Cache hit — instant, no spinner.
 		if (_cache.has(targetDate))
 		{
 			_applyCache(targetDate);
 			return;
 		}
 
-		// Cache miss — update date label, show spinner, then fetch.
+		// Cache miss — show spinner and fetch.
 		_isFetching = true;
 
 		setState
@@ -218,7 +234,6 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 	{
 		final next = _service.shiftWeek(_startDate, 1);
 		_navigateTo(next);
-		// Pre-cache the week after next silently.
 		_fetchAndCache(_service.shiftWeek(next, 1));
 	}
 
@@ -250,7 +265,7 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 		return Scaffold
 		(
 			drawer: const AppDrawer(),
-			appBar: CustomAppBar(title: "Timetable"),
+			appBar: CustomAppBar(title: 'Timetable'),
 			body: Column
 			(
 				children:
@@ -272,14 +287,18 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 									icon:      const Icon(Icons.chevron_left),
 									onPressed: _isFetching ? null : _goToPrevWeek,
 								),
-								Text
+								Expanded
 								(
-									_weekLabel(),
-									style: theme.textTheme.titleSmall?.copyWith
+									child: Text
 									(
-										color: _isLoading
-											? colours.onSurface.withOpacity(0.45)
-											: colours.onSurface,
+										_weekLabel(),
+										textAlign: TextAlign.center,
+										style: theme.textTheme.titleSmall?.copyWith
+										(
+											color: _isLoading
+												? colours.onSurface.withOpacity(0.45)
+												: colours.onSurface,
+										),
 									),
 								),
 								IconButton
@@ -290,6 +309,20 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 							],
 						),
 					),
+
+					// Today button — only shown when not on current week.
+					if (isThisWeek == false)
+						Padding
+						(
+							padding: const EdgeInsets.only(bottom: 4),
+							child: TextButton.icon
+							(
+								onPressed: _goToCurrentWeek,
+								icon:      const Icon(Icons.today_outlined, size: 16),
+								label:     const Text('Back to current week'),
+							),
+						),
+
 					const Divider(height: 1),
 
 					// ############################

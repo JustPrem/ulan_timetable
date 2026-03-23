@@ -20,6 +20,8 @@ dependencies:
   url_launcher: ^6.3.2
   html: ^0.15.6
   flutter_launcher_icons: ^0.14.4
+  qr_flutter: ^4.1.0
+  package_info_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:

@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 // Services.
 import 'package:ulan_timetable/services/credentials_service.dart';
+import 'package:ulan_timetable/services/update_service.dart';
 
 // ########################
 // Widget - App Drawer.
@@ -174,6 +175,14 @@ class AppDrawer extends ConsumerWidget
 									await launchUrl(url, mode: LaunchMode.externalApplication);
 								}
 							}
+						),
+						
+						// Share app QR Code.
+						ListTile
+						(
+							leading: Icon(Icons.qr_code, color: colorScheme.onSurface),
+							title:   const Text('Download App'),
+							onTap: () => UpdateService().showQrCode(context),
 						),
 
 						Divider(color: colorScheme.outlineVariant),
