@@ -23,7 +23,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget
 	Widget build(BuildContext context)
 	{
 		final currentRoute = ModalRoute.of(context)?.settings.name;
-		final showBackButton = currentRoute != "/" && currentRoute != "/timetable";
+		final showBackButton = currentRoute != "/login" && currentRoute != "/timetable";
 
 		return AppBar
 		(

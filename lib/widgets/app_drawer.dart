@@ -203,7 +203,7 @@ class AppDrawer extends ConsumerWidget
 							onTap: () async
 							{
 								await CredentialsService().clear();
-								Navigator.pushReplacementNamed(context, '/');
+								Navigator.pushReplacementNamed(context, '/login');
 							},
 						),
 						const SizedBox(height: 8),

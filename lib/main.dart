@@ -71,7 +71,7 @@ class AndroidApp extends ConsumerWidget
 
 	static final Map<String, WidgetBuilder> _routes =
 	{
-		"/"				: (_) => const AndroidLogin(),
+		"/login"		: (_) => const AndroidLogin(),
 		"/timetable" 	: (_) => const AndroidTimeTable(),
 		"/settings"		: (_) => const AndroidSettings(),
 	};
@@ -103,7 +103,7 @@ class AndroidApp extends ConsumerWidget
 			darkTheme: selectedTheme.darkTheme(textTheme),
 			themeMode: settings.darkMode ? ThemeMode.dark : ThemeMode.light,
 			routes: _routes,
-			initialRoute: hasCredentials ? "/timetable" : "/",
+			initialRoute: hasCredentials ? "/timetable" : "/login",
 		);
 	}
 }
