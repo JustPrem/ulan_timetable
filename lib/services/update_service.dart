@@ -49,8 +49,9 @@ class UpdateService
 	// Constants.
 	// ############################
 
-	static const _repoApi     = 'https://api.github.com/repos/JustPrem/YOUR_REPO/releases/latest';
-	static const _downloadUrl = 'https://github.com/JustPrem/YOUR_REPO/releases/latest/download/app-release.apk';
+	static const _repoName    = "ulan_timetable";
+	static const _repoApi     = 'https://api.github.com/repos/JustPrem/$_repoName/releases/latest';
+	static const _downloadUrl = 'https://github.com/JustPrem/$_repoName/releases/latest/download/app-release.apk';
 
 	// ############################
 	// Update Check.
