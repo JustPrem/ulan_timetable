@@ -19,6 +19,12 @@ import 'package:ulan_timetable/widgets/app_drawer.dart';
 import 'package:ulan_timetable/widgets/app_bar.dart';
 
 // ########################
+// Constants.
+// ########################
+
+const _kDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+// ########################
 // AndroidTimeTable.
 // ########################
 
@@ -31,6 +37,7 @@ class AndroidTimeTable extends ConsumerStatefulWidget
 }
 
 class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
+	with SingleTickerProviderStateMixin
 {
 	// ############################
 	// State.
@@ -39,6 +46,8 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 	final _service       = TimetableService();
 	final _cache         = CacheService();
 	final _updateService = UpdateService();
+
+	late TabController _tabController;
 
 	List<TimetableEvent> _events     = [];
 	bool                 _isLoading  = false;
@@ -55,9 +64,65 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 	void initState()
 	{
 		super.initState();
-		_startDate = _service.getCurrentWeekMonday();
+		_startDate     = _service.getCurrentWeekMonday();
+		_tabController = TabController
+		(
+			length:       _kDays.length,
+			vsync:        this,
+			initialIndex: _initialTabIndex(),
+		);
 		_initialLoad();
 		_checkForUpdates();
+	}
+
+	@override
+	void dispose()
+	{
+		_tabController.dispose();
+		super.dispose();
+	}
+
+	// ############################
+	// Helpers.
+	// ############################
+
+	// Returns today's tab index if viewing current week, else Monday.
+	int _initialTabIndex()
+	{
+		final isThisWeek = _startDate == _service.getCurrentWeekMonday();
+		if (!isThisWeek) return 0;
+
+		final weekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
+		return weekday <= 5 ? weekday - 1 : 0;
+	}
+
+	bool _isCurrentDay(int tabIndex)
+	{
+		final isThisWeek = _startDate == _service.getCurrentWeekMonday();
+		if (!isThisWeek) return false;
+
+		final weekday = DateTime.now().weekday;
+		return weekday <= 5 && weekday - 1 == tabIndex;
+	}
+
+	Map<String, List<TimetableEvent>> get _grouped
+	{
+		final Map<String, List<TimetableEvent>> map = {};
+		for (final day in _kDays)
+		{
+			map[day] = [];
+		}
+		for (final event in _events)
+		{
+			// Match event day to our canonical day names.
+			final key = _kDays.firstWhere
+			(
+				(d) => event.day.startsWith(d),
+				orElse: () => '',
+			);
+			if (key.isNotEmpty) map[key]!.add(event);
+		}
+		return map;
 	}
 
 	// ############################
@@ -117,7 +182,6 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 		catch (_) {}
 	}
 
-	// Apply cached data to UI — strictly synchronous, never shows a spinner.
 	void _applyCache(String startDate)
 	{
 		final cached = _cache.get(startDate)!;
@@ -132,9 +196,11 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 				_error      = null;
 			},
 		);
+
+		// Jump to correct tab after applying cache.
+		_tabController.animateTo(_initialTabIndex());
 	}
 
-	// Fetch and store in cache. Never touches UI state.
 	Future<void> _fetchAndCache(String startDate) async
 	{
 		if (_cache.has(startDate)) return;
@@ -150,24 +216,19 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 
 			_cache.store(startDate, events, weekNumber);
 		}
-		catch (_)
-		{
-			// Silently fail — pre-caching is best effort.
-		}
+		catch (_) {}
 	}
 
 	Future<void> _navigateTo(String targetDate) async
 	{
 		if (_isFetching) return;
 
-		// Cache hit — instant, no spinner.
 		if (_cache.has(targetDate))
 		{
 			_applyCache(targetDate);
 			return;
 		}
 
-		// Cache miss — show spinner and fetch.
 		_isFetching = true;
 
 		setState
@@ -207,6 +268,8 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 						_error      = null;
 					},
 				);
+
+				_tabController.animateTo(_initialTabIndex());
 			}
 		}
 		catch (e)
@@ -306,8 +369,7 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 						),
 					),
 
-					// Today button — only shown when not on current week.
-					if (isThisWeek == false)
+					if (!isThisWeek)
 						Padding
 						(
 							padding: const EdgeInsets.only(bottom: 4),
@@ -319,7 +381,52 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 							),
 						),
 
-					const Divider(height: 1),
+					// ############################
+					// Day Tabs.
+					// ############################
+
+					TabBar
+					(
+						controller:        _tabController,
+						isScrollable:      true,
+						tabAlignment:      TabAlignment.start,
+						dividerColor:      colours.outlineVariant,
+						indicatorColor:    colours.primary,
+						labelColor:        colours.primary,
+						unselectedLabelColor: colours.onSurfaceVariant,
+						tabs: List.generate
+						(
+							_kDays.length,
+							(i)
+							{
+								final isToday = _isCurrentDay(i);
+								return Tab
+								(
+									child: Row
+									(
+										mainAxisSize: MainAxisSize.min,
+										children:
+										[
+											if (isToday) ...[
+												Container
+												(
+													width:  6,
+													height: 6,
+													margin: const EdgeInsets.only(right: 6),
+													decoration: BoxDecoration
+													(
+														color:  colours.primary,
+														shape:  BoxShape.circle,
+													),
+												),
+											],
+											Text(_kDays[i]),
+										],
+									),
+								);
+							},
+						),
+					),
 
 					// ############################
 					// Body.
@@ -331,9 +438,20 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 							? const Center(child: CircularProgressIndicator())
 							: _error != null
 								? _ErrorView(message: _error!, onRetry: () => _navigateTo(_startDate))
-								: _events.isEmpty
-									? const _EmptyView()
-									: _TimetableBody(events: _events),
+								: TabBarView
+								(
+									controller: _tabController,
+									children: _kDays.map
+									(
+										(day)
+										{
+											final dayEvents = _grouped[day] ?? [];
+											return dayEvents.isEmpty
+												? _EmptyDayView(day: day)
+												: _DayEventList(events: dayEvents);
+										},
+									).toList(),
+								),
 					),
 				],
 			),
@@ -342,53 +460,22 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 }
 
 // ########################
-// Timetable Body.
+// Day Event List.
 // ########################
 
-class _TimetableBody extends StatelessWidget
+class _DayEventList extends StatelessWidget
 {
 	final List<TimetableEvent> events;
 
-	const _TimetableBody({required this.events});
+	const _DayEventList({required this.events});
 
 	@override
 	Widget build(BuildContext context)
 	{
-		final Map<String, List<TimetableEvent>> grouped = {};
-		for (final event in events)
-		{
-			grouped.putIfAbsent(event.day, () => []).add(event);
-		}
-
 		return ListView
 		(
 			padding: const EdgeInsets.all(16),
-			children: grouped.entries.map
-			(
-				(entry)
-				{
-					return Column
-					(
-						crossAxisAlignment: CrossAxisAlignment.start,
-						children:
-						[
-							Padding
-							(
-								padding: const EdgeInsets.only(top: 16, bottom: 8),
-								child: Text
-								(
-									entry.key,
-									style: Theme.of(context).textTheme.titleMedium?.copyWith
-									(
-										fontWeight: FontWeight.bold,
-									),
-								),
-							),
-							...entry.value.map((e) => _EventCard(event: e)),
-						],
-					);
-				},
-			).toList(),
+			children: events.map((e) => _EventCard(event: e)).toList(),
 		);
 	}
 }
@@ -507,12 +594,14 @@ class _EventCard extends StatelessWidget
 }
 
 // ########################
-// Empty View.
+// Empty Day View.
 // ########################
 
-class _EmptyView extends StatelessWidget
+class _EmptyDayView extends StatelessWidget
 {
-	const _EmptyView();
+	final String day;
+
+	const _EmptyDayView({required this.day});
 
 	@override
 	Widget build(BuildContext context)
@@ -526,14 +615,14 @@ class _EmptyView extends StatelessWidget
 				[
 					Icon
 					(
-						Icons.event_available_outlined,
-						size:  64,
+						Icons.free_breakfast_outlined,
+						size:  56,
 						color: Theme.of(context).colorScheme.outlineVariant,
 					),
-					const SizedBox(height: 16),
+					const SizedBox(height: 12),
 					Text
 					(
-						'No classes this week',
+						'No classes on $day',
 						style: Theme.of(context).textTheme.bodyLarge,
 					),
 				],
