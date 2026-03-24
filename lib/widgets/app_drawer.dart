@@ -167,6 +167,7 @@ class AppDrawer extends ConsumerWidget
 						(
 							leading: Icon(Icons.computer_outlined, color: colorScheme.onSurface),
 							title: const Text("Developer Website"),
+							subtitle: const Text("Created by Przemek Kaniewski"),
 							onTap: () async
 							{
 								final url = Uri.parse("https://www.code-prem.dev");
@@ -181,7 +182,7 @@ class AppDrawer extends ConsumerWidget
 						ListTile
 						(
 							leading: Icon(Icons.qr_code, color: colorScheme.onSurface),
-							title:   const Text('Download App'),
+							title:   const Text('Share the App'),
 							onTap: () => UpdateService().showQrCode(context),
 						),
 

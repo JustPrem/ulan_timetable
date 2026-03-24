@@ -108,17 +108,13 @@ class _AndroidTimeTableState extends ConsumerState<AndroidTimeTable>
 	{
 		try
 		{
-			final result = await _updateService.checkForUpdate();
-
-			if (result.hasUpdate && mounted)
+			final info = await _updateService.checkForUpdate();
+			if (info.hasUpdate && mounted)
 			{
-				_updateService.showUpdateDialog(context, result.latestVersion);
+				_updateService.showUpdateDialog(context, info);
 			}
 		}
-		catch (_)
-		{
-			// Silently fail — update check is non-critical.
-		}
+		catch (_) {}
 	}
 
 	// Apply cached data to UI — strictly synchronous, never shows a spinner.

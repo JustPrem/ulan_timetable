@@ -5,10 +5,29 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// ########################
+// Model.
+// ########################
+
+class ReleaseInfo
+{
+	final bool   hasUpdate;
+	final String latestVersion;
+	final String releaseNotes;
+
+	const ReleaseInfo
+	({
+		required this.hasUpdate,
+		required this.latestVersion,
+		required this.releaseNotes,
+	});
+}
 
 // ########################
 // UpdateService.
@@ -29,16 +48,15 @@ class UpdateService
 	// ############################
 	// Constants.
 	// ############################
-	
-	static const _repoName    = 'ulan_timetable';
-	static const _repoApi     = 'https://api.github.com/repos/JustPrem/$_repoName/releases/latest';
-	static const _downloadUrl = 'https://github.com/JustPrem/$_repoName/releases/latest/download/app-release.apk';
+
+	static const _repoApi     = 'https://api.github.com/repos/JustPrem/YOUR_REPO/releases/latest';
+	static const _downloadUrl = 'https://github.com/JustPrem/YOUR_REPO/releases/latest/download/app-release.apk';
 
 	// ############################
 	// Update Check.
 	// ############################
 
-	Future<({bool hasUpdate, String latestVersion})> checkForUpdate() async
+	Future<ReleaseInfo> checkForUpdate() async
 	{
 		final packageInfo    = await PackageInfo.fromPlatform();
 		final currentVersion = packageInfo.version;
@@ -56,9 +74,15 @@ class UpdateService
 
 		final json          = jsonDecode(response.body);
 		final latestVersion = (json['tag_name'] as String).replaceAll('v', '');
+		final releaseNotes  = (json['body'] as String? ?? '').trim();
 		final hasUpdate     = _isNewer(latestVersion, currentVersion);
 
-		return (hasUpdate: hasUpdate, latestVersion: latestVersion);
+		return ReleaseInfo
+		(
+			hasUpdate:     hasUpdate,
+			latestVersion: latestVersion,
+			releaseNotes:  releaseNotes,
+		);
 	}
 
 	// Compare semver — returns true if latest > current.
@@ -83,34 +107,152 @@ class UpdateService
 	// Update Dialog.
 	// ############################
 
-	void showUpdateDialog(BuildContext context, String latestVersion)
+	void showUpdateDialog(BuildContext context, ReleaseInfo info)
 	{
+		final theme   = Theme.of(context);
+		final colours = theme.colorScheme;
+
 		showDialog
 		(
 			context: context,
 			builder: (context)
 			{
-				return AlertDialog
+				return Dialog
 				(
-					title:   const Text('Update Available'),
-					content: Text('Version $latestVersion is available. Would you like to download it?'),
-					actions:
-					[
-						TextButton
+					child: ConstrainedBox
+					(
+						constraints: BoxConstraints
 						(
-							onPressed: () => Navigator.pop(context),
-							child:     const Text('Later'),
+							maxHeight: MediaQuery.of(context).size.height * 0.75,
+							maxWidth:  400,
 						),
-						FilledButton
+						child: Column
 						(
-							onPressed: () async
-							{
-								Navigator.pop(context);
-								await _launchDownload();
-							},
-							child: const Text('Download'),
+							mainAxisSize: MainAxisSize.min,
+							crossAxisAlignment: CrossAxisAlignment.start,
+							children:
+							[
+								// ---- Header ----
+								Padding
+								(
+									padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+									child: Row
+									(
+										children:
+										[
+											Icon(Icons.system_update_outlined, color: colours.primary, size: 22),
+											const SizedBox(width: 8),
+											Expanded
+											(
+												child: Text
+												(
+													'Version ${info.latestVersion} Available',
+													style: theme.textTheme.titleLarge,
+												),
+											),
+										],
+									),
+								),
+
+								const SizedBox(height: 12),
+								Divider(color: colours.outlineVariant, height: 1),
+
+								// ---- Release Notes ----
+								Flexible
+								(
+									child: info.releaseNotes.isNotEmpty
+										? Markdown
+										(
+											data:          info.releaseNotes,
+											shrinkWrap:    true,
+											padding:       const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+											styleSheet:    MarkdownStyleSheet.fromTheme(theme).copyWith
+											(
+												p:       theme.textTheme.bodyMedium,
+												h1:      theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+												h2:      theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+												h3:      theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+												code:    theme.textTheme.bodySmall?.copyWith
+												(
+													fontFamily:      'monospace',
+													backgroundColor: colours.surfaceContainerHighest,
+												),
+												codeblockDecoration: BoxDecoration
+												(
+													color:        colours.surfaceContainerHighest,
+													borderRadius: BorderRadius.circular(8),
+												),
+												blockquoteDecoration: BoxDecoration
+												(
+													border: Border
+													(
+														left: BorderSide
+														(
+															color: colours.primary,
+															width: 4,
+														),
+													),
+												),
+											),
+											onTapLink: (text, href, title) async
+											{
+												if (href != null)
+												{
+													final url = Uri.parse(href);
+													if (await canLaunchUrl(url))
+													{
+														await launchUrl(url, mode: LaunchMode.externalApplication);
+													}
+												}
+											},
+										)
+										: Padding
+										(
+											padding: const EdgeInsets.all(24),
+											child: Text
+											(
+												'No release notes provided.',
+												style: theme.textTheme.bodyMedium?.copyWith
+												(
+													color: colours.onSurfaceVariant,
+												),
+											),
+										),
+								),
+
+								Divider(color: colours.outlineVariant, height: 1),
+
+								// ---- Actions ----
+								Padding
+								(
+									padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+									child: Row
+									(
+										mainAxisAlignment: MainAxisAlignment.end,
+										children:
+										[
+											TextButton
+											(
+												onPressed: () => Navigator.pop(context),
+												child:     const Text('Later'),
+											),
+											const SizedBox(width: 8),
+											FilledButton.icon
+											(
+												onPressed: () async
+												{
+													Navigator.pop(context);
+													await _launchDownload();
+												},
+												icon:  const Icon(Icons.download_outlined, size: 18),
+												label: const Text('Download'),
+											),
+										],
+									),
+								),
+							],
 						),
-					],
+					),
 				);
 			},
 		);
@@ -127,8 +269,8 @@ class UpdateService
 
 		showModalBottomSheet
 		(
-			context:       context,
-			useSafeArea:   true,
+			context:     context,
+			useSafeArea: true,
 			builder: (context)
 			{
 				return Padding
